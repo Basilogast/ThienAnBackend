@@ -57,7 +57,7 @@ app.use('/uploads', express.static(uploadDirectory));
 app.use(
   cors({
     // origin: 'http://localhost:5173', // Allow requests from your frontend
-    origin: "https://basilogast.github.io/NguyenDoThienAn/",
+    origin: "https://basilogast.github.io",
     credentials: true, // Allow cookies and session headers to be sent
   })
 );
