@@ -56,7 +56,8 @@ app.use('/uploads', express.static(uploadDirectory));
 // Configure CORS to allow requests from the frontend with credentials
 app.use(
   cors({
-    origin: 'http://localhost:5173', // Allow requests from your frontend
+    // origin: 'http://localhost:5173', // Allow requests from your frontend
+    origin: "https://basilogast.github.io/NguyenDoThienAn/",
     credentials: true, // Allow cookies and session headers to be sent
   })
 );
