@@ -132,8 +132,6 @@ app.post('/api/workcards', upload.fields([{ name: 'img' }, { name: 'pdfUrl' }]),
   const pdfUrl = req.files?.pdfUrl ? `/uploads/${req.files.pdfUrl[0].filename}` : null;
 
   try {
-    const { size, text, textPara, img, pdfUrl, detailsRoute } = req.body;
-
     const textParaArray = textPara.split(',').map(item => item.trim());
     const result = await pool.query(
       'INSERT INTO workcards (size, img, text, "pdfUrl", "textPara", detailsRoute) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
@@ -151,7 +149,7 @@ app.post('/api/workcards', upload.fields([{ name: 'img' }, { name: 'pdfUrl' }]),
 
     res.status(201).json(insertedWorkCard);
   } catch (error) {
-    console.error("Error adding workcard:", error); // Log the actual error
+    console.error(error);
     res.status(500).json({ message: "Server error occurred." });
   }
 });
