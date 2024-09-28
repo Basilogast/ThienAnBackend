@@ -55,7 +55,7 @@ app.use('/uploads', express.static(uploadDirectory));
 
 // Configure CORS to allow requests from the frontend with credentials
 const allowedOrigins = ['https://basilogast.github.io', 'http://localhost:5173'];
-//test
+
 app.use(cors({
   origin: function (origin, callback) {
     if (allowedOrigins.includes(origin) || !origin) {
