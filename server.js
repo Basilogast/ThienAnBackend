@@ -127,9 +127,13 @@ app.get('/api/workcards', async (req, res) => {
 
 // Add a new workcard (with image and PDF uploads)
 app.post('/api/workcards', async (req, res) => {
-  const { size, text, textPara, img, pdfUrl, detailsRoute } = req.body;
-
   try {
+    const { size, text, textPara, img, pdfUrl, detailsRoute } = req.body;
+
+    if (!size || !text || !textPara) {
+      return res.status(400).json({ message: "Missing required fields." });
+    }
+
     const textParaArray = textPara.split(',').map(item => item.trim());
     const result = await pool.query(
       'INSERT INTO workcards (size, img, text, "pdfUrl", "textPara", detailsRoute) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
@@ -139,10 +143,11 @@ app.post('/api/workcards', async (req, res) => {
     const insertedWorkCard = result.rows[0];
     res.status(201).json(insertedWorkCard);
   } catch (error) {
-    console.error(error);
-    res.status(500).send('Server Error');
+    console.error("Error adding workcard:", error); // Log the actual error
+    res.status(500).json({ message: "Server error occurred." });
   }
 });
+
 
 // Delete a workcard by ID
 app.delete('/api/workcards/:id', async (req, res) => {
