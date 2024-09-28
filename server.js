@@ -126,10 +126,8 @@ app.get('/api/workcards', async (req, res) => {
 });
 
 // Add a new workcard (with image and PDF uploads)
-app.post('/api/workcards', upload.fields([{ name: 'img' }, { name: 'pdfUrl' }]), async (req, res) => {
-  const { size, text, textPara, detailsRoute } = req.body;
-  const img = req.files?.img ? `/uploads/${req.files.img[0].filename}` : null;
-  const pdfUrl = req.files?.pdfUrl ? `/uploads/${req.files.pdfUrl[0].filename}` : null;
+app.post('/api/workcards', async (req, res) => {
+  const { size, text, textPara, img, pdfUrl, detailsRoute } = req.body;
 
   try {
     const textParaArray = textPara.split(',').map(item => item.trim());
@@ -138,15 +136,7 @@ app.post('/api/workcards', upload.fields([{ name: 'img' }, { name: 'pdfUrl' }]),
       [size, img, text, pdfUrl, textParaArray, detailsRoute]
     );
 
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
     const insertedWorkCard = result.rows[0];
-    if (insertedWorkCard.img) {
-      insertedWorkCard.img = `${baseUrl}${insertedWorkCard.img}`;
-    }
-    if (insertedWorkCard.pdfUrl) {
-      insertedWorkCard.pdfUrl = `${baseUrl}${insertedWorkCard.pdfUrl}`;
-    }
-
     res.status(201).json(insertedWorkCard);
   } catch (error) {
     console.error(error);
@@ -167,11 +157,9 @@ app.delete('/api/workcards/:id', async (req, res) => {
 });
 
 // Update a workcard by ID (with image and PDF uploads)
-app.put('/api/workcards/:id', upload.fields([{ name: 'img' }, { name: 'pdfUrl' }]), async (req, res) => {
+app.put('/api/workcards/:id', async (req, res) => {
   const { id } = req.params;
-  const { size, text, textPara, detailsRoute } = req.body;
-  const img = req.files?.img ? `/uploads/${req.files.img[0].filename}` : null;
-  const pdfUrl = req.files?.pdfUrl ? `/uploads/${req.files.pdfUrl[0].filename}` : null;
+  const { size, text, textPara, img, pdfUrl, detailsRoute } = req.body;
 
   try {
     const textParaArray = textPara.split(',').map(item => item.trim());
@@ -211,15 +199,7 @@ app.put('/api/workcards/:id', upload.fields([{ name: 'img' }, { name: 'pdfUrl' }
     values.push(id);
 
     const result = await pool.query(query, values);
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
     const updatedWorkCard = result.rows[0];
-    if (updatedWorkCard.img) {
-      updatedWorkCard.img = `${baseUrl}${updatedWorkCard.img}`;
-    }
-    if (updatedWorkCard.pdfUrl) {
-      updatedWorkCard.pdfUrl = `${baseUrl}${updatedWorkCard.pdfUrl}`;
-    }
-
     res.status(200).json(updatedWorkCard);
   } catch (error) {
     console.error(error);
