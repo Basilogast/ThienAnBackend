@@ -130,10 +130,6 @@ app.post('/api/workcards', async (req, res) => {
   try {
     const { size, text, textPara, img, pdfUrl, detailsRoute } = req.body;
 
-    if (!size || !text || !textPara) {
-      return res.status(400).json({ message: "Missing required fields." });
-    }
-
     const textParaArray = textPara.split(',').map(item => item.trim());
     const result = await pool.query(
       'INSERT INTO workcards (size, img, text, "pdfUrl", "textPara", detailsRoute) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
