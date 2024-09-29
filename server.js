@@ -2,14 +2,13 @@ import express from 'express';
 import cors from 'cors';
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
-// import multer from 'multer';
 import path from 'path';
-import fs from 'fs';
-import session from 'express-session'; // Import express-session
-import pkg from 'pg'; // Import the whole 'pg' package as 'pkg'
-import formidableMiddleware from 'express-formidable'; // Import express-formidable
+import session from 'express-session';
+import pkg from 'pg'; // PostgreSQL package
+import formidableMiddleware from 'express-formidable'; // Formidable middleware for handling form data
 import { fileURLToPath } from 'url';
-
+import admin from 'firebase-admin'; // Firebase Admin SDK for file deletion
+import { readFile } from 'fs/promises'; // Use readFile for async reading of JSON
 
 dotenv.config(); // Load environment variables from .env file
 
@@ -35,41 +34,33 @@ const pool = new Pool({
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// // Create /uploads directory if it doesn't exist
-// const uploadDirectory = path.join(__dirname, 'uploads');
-// if (!fs.existsSync(uploadDirectory)) {
-//   fs.mkdirSync(uploadDirectory);
-// }
+// Use readFile to read the serviceAccountKey.json asynchronously
+const serviceAccount = JSON.parse(
+  await readFile(new URL('./serviceAccountKey.json', import.meta.url))
+);
 
+// Firebase Admin SDK initialization
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+  storageBucket: 'thienanport.appspot.com', // Replace with your Firebase Storage bucket
+});
+const bucket = admin.storage().bucket(); // Get a reference to the storage bucket
 
-// Set up multer for file uploads
-// const storage = multer.diskStorage({
-//   destination: (req, file, cb) => {
-//     cb(null, uploadDirectory);
-//   },
-//   filename: (req, file, cb) => {
-//     cb(null, `${Date.now()}-${file.originalname}`);
-//   },
-// });
-// const upload = multer({ storage });
-
-// Serve static files from the uploads directory
-// app.use('/uploads', express.static(uploadDirectory));
-
+// Middleware setup
 app.use(formidableMiddleware());
+app.use(express.json()); // Parse JSON bodies
 
 // Configure CORS to allow requests from the frontend with credentials
 const allowedOrigins = ['https://basilogast.github.io', 'http://localhost:5173'];
-
 app.use(cors({
-  origin: function (origin, callback) {
+  origin: (origin, callback) => {
     if (allowedOrigins.includes(origin) || !origin) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true, // If you are using cookies or sessions
+  credentials: true, // Using cookies or sessions
 }));
 
 // Set up session middleware
@@ -77,7 +68,7 @@ app.use(
   session({
     secret: 'your-secret-key', // Replace with your own secret key
     resave: false,
-    saveUninitialized: false, // Only save session if modified
+    saveUninitialized: false,
     cookie: {
       secure: false, // Set secure: true if using HTTPS
       httpOnly: true, // Prevent JavaScript access to the cookie
@@ -85,9 +76,6 @@ app.use(
     },
   })
 );
-
-// Middleware to parse JSON bodies
-app.use(express.json());
 
 // --------------- WORKCARDS ROUTES (POSTGRES) ---------------- //
 
@@ -107,29 +95,22 @@ const createTable = async () => {
 };
 createTable();
 
-
 // Get all workcards
 app.get('/api/workcards', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM workcards');
-    
-    // Simply return the workcards without modifying the img or pdfUrl fields
-    res.json(result.rows);
+    res.json(result.rows); // Return the workcards without modifying the img or pdfUrl fields
   } catch (error) {
     console.error(error);
     res.status(500).send('Server Error');
   }
 });
 
-
-
-// Add a new workcard (with image and PDF uploads)
+// Add a new workcard
 app.post('/api/workcards', async (req, res) => {
   try {
-    console.log("Request Fields:", req.fields); // Log form fields (text data)
-    console.log("Request Files:", req.files); 
-
-    const { size, text, textPara, img, pdfUrl, detailsRoute } = req.fields; //Mẹ nó ban đầu là req.body chỉ cần sửa thành req.fields là dc, ngồi cả buổi trời
+    console.log("Request Fields:", req.fields);
+    const { size, text, textPara, img, pdfUrl, detailsRoute } = req.fields;
 
     // Safely handle the textPara array
     const textParaArray = textPara ? textPara.split(',').map(item => item.trim()) : [];
@@ -139,44 +120,94 @@ app.post('/api/workcards', async (req, res) => {
       'INSERT INTO workcards (size, img, text, "pdfUrl", "textPara", detailsRoute) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
       [size, img, text, pdfUrl, textParaArray, detailsRoute]
     );
-
-    const insertedWorkCard = result.rows[0];
-    res.status(201).json(insertedWorkCard);
+    res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error("Error adding workcard:", error);
     res.status(500).json({ message: "Server error occurred." });
   }
 });
 
-
-
-
-// Delete a workcard by ID
+// Delete a workcard by ID, and remove associated files from Firebase Storage
+// Delete a workcard by ID, and remove associated files from Firebase Storage
+// Delete a workcard by ID, and remove associated files from Firebase Storage
 app.delete('/api/workcards/:id', async (req, res) => {
   const { id } = req.params;
+
+  console.log('Delete request received for workcard with id:', id);
+
   try {
+    // Retrieve workcard to get img and pdfUrl for deletion
+    const result = await pool.query('SELECT img, "pdfUrl" FROM workcards WHERE id = $1', [id]);
+
+    if (result.rows.length === 0) {
+      console.log('Workcard not found with id:', id);
+      return res.status(404).json({ message: 'Workcard not found' });
+    }
+
+    const { img, pdfUrl } = result.rows[0];
+
+    console.log('img:', img, 'pdfUrl:', pdfUrl);
+
+    // Helper function to extract Firebase file path from URL
+    const extractFirebaseFilePath = (url) => {
+      const match = decodeURIComponent(url).match(/\/o\/(.*?)\?/);
+      return match ? match[1] : null;
+    };
+
+    // Remove img from Firebase Storage
+    if (img) {
+      const imgFilePath = extractFirebaseFilePath(img);
+      if (imgFilePath) {
+        console.log(`Attempting to delete image: ${imgFilePath}`);
+        await bucket.file(imgFilePath).delete();
+        console.log(`Deleted image: ${imgFilePath}`);
+      } else {
+        console.log('No valid image file path extracted for deletion.');
+      }
+    } else {
+      console.log('No image found for workcard with id:', id);
+    }
+
+    // Remove pdf from Firebase Storage
+    if (pdfUrl) {
+      const pdfFilePath = extractFirebaseFilePath(pdfUrl);
+      if (pdfFilePath) {
+        console.log(`Attempting to delete PDF: ${pdfFilePath}`);
+        await bucket.file(pdfFilePath).delete();
+        console.log(`Deleted PDF: ${pdfFilePath}`);
+      } else {
+        console.log('No valid PDF file path extracted for deletion.');
+      }
+    } else {
+      console.log('No PDF found for workcard with id:', id);
+    }
+
+    // Delete workcard from the database
     await pool.query('DELETE FROM workcards WHERE id = $1', [id]);
-    res.status(200).send('Workcard deleted successfully');
+    console.log('Deleted workcard from database with id:', id);
+
+    res.status(200).json({ message: 'Workcard and associated files deleted successfully' });
   } catch (error) {
-    console.error(error);
+    console.error('Error deleting workcard or files:', error);
     res.status(500).send('Server Error');
   }
 });
 
-// Update a workcard by ID (with image and PDF uploads)
+
+
+
+// Update a workcard by ID
 app.put('/api/workcards/:id', async (req, res) => {
   const { id } = req.params;
   const { size, text, textPara, detailsRoute, img, pdfUrl } = req.fields;
 
   try {
-    // Safely handle the textPara array
     const textParaArray = textPara ? textPara.split(',').map(item => item.trim()) : [];
 
     const updates = [];
     const values = [];
     let query = 'UPDATE workcards SET ';
 
-    // Dynamically construct the query and values array
     if (size) {
       updates.push(`size = $${values.length + 1}`);
       values.push(size);
@@ -206,15 +237,11 @@ app.put('/api/workcards/:id', async (req, res) => {
       return res.status(400).send('No updates provided.');
     }
 
-    // Finish constructing the query with the WHERE clause
     query += updates.join(', ') + ` WHERE id = $${values.length + 1} RETURNING *`;
     values.push(id);
 
-    // Execute the query and return the updated workcard
     const result = await pool.query(query, values);
-    const updatedWorkCard = result.rows[0];
-
-    res.status(200).json(updatedWorkCard);
+    res.status(200).json(result.rows[0]);
   } catch (error) {
     console.error('Error updating workcard:', error);
     res.status(500).send('Server Error');
@@ -235,7 +262,6 @@ app.get('/api/workcards/:id', async (req, res) => {
     res.status(500).send('Server Error');
   }
 });
-
 // Logout Route: Destroy session
 app.post("/logout", (req, res) => {
   req.session.destroy((err) => {
