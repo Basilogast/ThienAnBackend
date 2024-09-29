@@ -2,12 +2,14 @@ import express from 'express';
 import cors from 'cors';
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
-import multer from 'multer';
+// import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import session from 'express-session'; // Import express-session
 import pkg from 'pg'; // Import the whole 'pg' package as 'pkg'
+import formidableMiddleware from 'express-formidable'; // Import express-formidable
 import { fileURLToPath } from 'url';
+
 
 dotenv.config(); // Load environment variables from .env file
 
@@ -33,25 +35,28 @@ const pool = new Pool({
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Create /uploads directory if it doesn't exist
-const uploadDirectory = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadDirectory)) {
-  fs.mkdirSync(uploadDirectory);
-}
+// // Create /uploads directory if it doesn't exist
+// const uploadDirectory = path.join(__dirname, 'uploads');
+// if (!fs.existsSync(uploadDirectory)) {
+//   fs.mkdirSync(uploadDirectory);
+// }
+
 
 // Set up multer for file uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDirectory);
-  },
-  filename: (req, file, cb) => {
-    cb(null, `${Date.now()}-${file.originalname}`);
-  },
-});
-const upload = multer({ storage });
+// const storage = multer.diskStorage({
+//   destination: (req, file, cb) => {
+//     cb(null, uploadDirectory);
+//   },
+//   filename: (req, file, cb) => {
+//     cb(null, `${Date.now()}-${file.originalname}`);
+//   },
+// });
+// const upload = multer({ storage });
 
 // Serve static files from the uploads directory
-app.use('/uploads', express.static(uploadDirectory));
+// app.use('/uploads', express.static(uploadDirectory));
+
+app.use(formidableMiddleware());
 
 // Configure CORS to allow requests from the frontend with credentials
 const allowedOrigins = ['https://basilogast.github.io', 'http://localhost:5173'];
@@ -102,57 +107,48 @@ const createTable = async () => {
 };
 createTable();
 
+
 // Get all workcards
 app.get('/api/workcards', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM workcards');
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-
-    const workcards = result.rows.map(workcard => {
-      if (workcard.img) {
-        workcard.img = `${baseUrl}${workcard.img}`;
-      }
-      if (workcard.pdfUrl) {
-        workcard.pdfUrl = `${baseUrl}${workcard.pdfUrl}`;
-      }
-      return workcard;
-    });
-
-    res.json(workcards);
+    
+    // Simply return the workcards without modifying the img or pdfUrl fields
+    res.json(result.rows);
   } catch (error) {
     console.error(error);
     res.status(500).send('Server Error');
   }
 });
 
-// Add a new workcard (with image and PDF uploads)
-app.post('/api/workcards', upload.fields([{ name: 'img' }, { name: 'pdfUrl' }]), async (req, res) => {
-  const { size, text, textPara, detailsRoute } = req.body;
-  const img = req.files?.img ? `/uploads/${req.files.img[0].filename}` : null;
-  const pdfUrl = req.files?.pdfUrl ? `/uploads/${req.files.pdfUrl[0].filename}` : null;
 
+
+// Add a new workcard (with image and PDF uploads)
+app.post('/api/workcards', async (req, res) => {
   try {
-    const textParaArray = textPara.split(',').map(item => item.trim());
+    console.log("Request Fields:", req.fields); // Log form fields (text data)
+    console.log("Request Files:", req.files); 
+
+    const { size, text, textPara, img, pdfUrl, detailsRoute } = req.fields; //Mẹ nó ban đầu là req.body chỉ cần sửa thành req.fields là dc, ngồi cả buổi trời
+
+    // Safely handle the textPara array
+    const textParaArray = textPara ? textPara.split(',').map(item => item.trim()) : [];
+
+    // Insert into database
     const result = await pool.query(
       'INSERT INTO workcards (size, img, text, "pdfUrl", "textPara", detailsRoute) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
       [size, img, text, pdfUrl, textParaArray, detailsRoute]
     );
 
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
     const insertedWorkCard = result.rows[0];
-    if (insertedWorkCard.img) {
-      insertedWorkCard.img = `${baseUrl}${insertedWorkCard.img}`;
-    }
-    if (insertedWorkCard.pdfUrl) {
-      insertedWorkCard.pdfUrl = `${baseUrl}${insertedWorkCard.pdfUrl}`;
-    }
-
     res.status(201).json(insertedWorkCard);
   } catch (error) {
-    console.error(error);
+    console.error("Error adding workcard:", error);
     res.status(500).json({ message: "Server error occurred." });
   }
 });
+
+
 
 
 // Delete a workcard by ID
@@ -168,18 +164,19 @@ app.delete('/api/workcards/:id', async (req, res) => {
 });
 
 // Update a workcard by ID (with image and PDF uploads)
-app.put('/api/workcards/:id', upload.fields([{ name: 'img' }, { name: 'pdfUrl' }]), async (req, res) => {
+app.put('/api/workcards/:id', async (req, res) => {
   const { id } = req.params;
-  const { size, text, textPara, detailsRoute } = req.body;
-  const img = req.files?.img ? `/uploads/${req.files.img[0].filename}` : null;
-  const pdfUrl = req.files?.pdfUrl ? `/uploads/${req.files.pdfUrl[0].filename}` : null;
+  const { size, text, textPara, detailsRoute, img, pdfUrl } = req.fields;
 
   try {
-    const textParaArray = textPara.split(',').map(item => item.trim());
+    // Safely handle the textPara array
+    const textParaArray = textPara ? textPara.split(',').map(item => item.trim()) : [];
+
     const updates = [];
     const values = [];
     let query = 'UPDATE workcards SET ';
 
+    // Dynamically construct the query and values array
     if (size) {
       updates.push(`size = $${values.length + 1}`);
       values.push(size);
@@ -204,26 +201,22 @@ app.put('/api/workcards/:id', upload.fields([{ name: 'img' }, { name: 'pdfUrl' }
       updates.push(`"pdfUrl" = $${values.length + 1}`);
       values.push(pdfUrl);
     }
+
     if (updates.length === 0) {
       return res.status(400).send('No updates provided.');
     }
 
+    // Finish constructing the query with the WHERE clause
     query += updates.join(', ') + ` WHERE id = $${values.length + 1} RETURNING *`;
     values.push(id);
 
+    // Execute the query and return the updated workcard
     const result = await pool.query(query, values);
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
     const updatedWorkCard = result.rows[0];
-    if (updatedWorkCard.img) {
-      updatedWorkCard.img = `${baseUrl}${updatedWorkCard.img}`;
-    }
-    if (updatedWorkCard.pdfUrl) {
-      updatedWorkCard.pdfUrl = `${baseUrl}${updatedWorkCard.pdfUrl}`;
-    }
 
     res.status(200).json(updatedWorkCard);
   } catch (error) {
-    console.error(error);
+    console.error('Error updating workcard:', error);
     res.status(500).send('Server Error');
   }
 });
