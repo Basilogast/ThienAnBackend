@@ -29,10 +29,10 @@ const pool = new Pool({
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Use readFile to read the serviceAccountKey.json asynchronously
-const serviceAccount = JSON.parse(
-  await readFile(new URL('./serviceAccountKey.json', import.meta.url))
-);
+// // Use readFile to read the serviceAccountKey.json asynchronously
+// const serviceAccount = JSON.parse(
+//   await readFile(new URL('./serviceAccountKey.json', import.meta.url))
+// );
 
 // Firebase Admin SDK initialization
 admin.initializeApp({
