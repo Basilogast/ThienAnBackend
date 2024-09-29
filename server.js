@@ -18,16 +18,11 @@ const { Pool } = pkg; // Destructure 'Pool' from 'pg'
 
 // PostgreSQL client setup
 const pool = new Pool({
-  // user: 'workcardsuser',
-  // host: 'localhost',
-  // database: 'workcardsdb',
-  // password: 'Hung08112003',
-  // port: 5432,
-  user: 'postgres.gqfnhqrxmjtkoeoopfff',
-  host: 'aws-0-eu-central-1.pooler.supabase.com',
-  database: 'postgres',
-  password: 'Shadowmane@08112003',
-  port: 6543,
+  user: process.env.DB_USER,
+  host: process.env.DB_HOST,
+  database: process.env.DB_NAME,
+  password: process.env.DB_PASSWORD,
+  port: process.env.DB_PORT,
 });
 
 // Get __dirname equivalent in ES modules
@@ -41,13 +36,25 @@ const serviceAccount = JSON.parse(
 
 // Firebase Admin SDK initialization
 admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-  storageBucket: 'thienanport.appspot.com', // Replace with your Firebase Storage bucket
+  credential: admin.credential.cert({
+    type: process.env.FIREBASE_TYPE,
+    project_id: process.env.FIREBASE_PROJECT_ID,
+    private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
+    private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'), // ensure newlines are correctly parsed
+    client_email: process.env.FIREBASE_CLIENT_EMAIL,
+    client_id: process.env.FIREBASE_CLIENT_ID,
+    auth_uri: process.env.FIREBASE_AUTH_URI,
+    token_uri: process.env.FIREBASE_TOKEN_URI,
+    auth_provider_x509_cert_url: process.env.FIREBASE_AUTH_PROVIDER_X509_CERT_URL,
+    client_x509_cert_url: process.env.FIREBASE_CLIENT_X509_CERT_URL
+  }),
+  storageBucket: 'thienanport.appspot.com' // Your Firebase Storage bucket
 });
+
 const bucket = admin.storage().bucket(); // Get a reference to the storage bucket
 
 // Middleware setup
-app.use(formidableMiddleware());
+// app.use(formidableMiddleware());
 app.use(express.json()); // Parse JSON bodies
 
 // Configure CORS to allow requests from the frontend with credentials
@@ -107,7 +114,7 @@ app.get('/api/workcards', async (req, res) => {
 });
 
 // Add a new workcard
-app.post('/api/workcards', async (req, res) => {
+app.post('/api/workcards', formidableMiddleware(), async (req, res) => {
   try {
     console.log("Request Fields:", req.fields);
     const { size, text, textPara, img, pdfUrl, detailsRoute } = req.fields;
