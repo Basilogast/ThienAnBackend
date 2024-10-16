@@ -145,9 +145,7 @@ app.post("/api/:table", formidableMiddleware(), async (req, res) => {
 
   try {
     const { size, text, textPara, img, pdfUrl, detailsRoute } = req.fields;
-    const textParaArray = textPara
-      ? textPara.split(",").map((item) => item.trim())
-      : [];
+    const textParaArray = textPara;
 
     const result = await pool.query(
       `INSERT INTO ${table} (size, img, text, "pdfUrl", "textPara", "detailsRoute") 
@@ -223,9 +221,7 @@ app.put("/api/:table/:id", formidableMiddleware(), async (req, res) => {
 
   try {
     const { size, text, textPara, detailsRoute, img, pdfUrl } = req.fields;
-    const textParaArray = textPara
-      ? textPara.split(",").map((item) => item.trim())
-      : [];
+    const textParaArray = textPara;
 
     const updates = [];
     const values = [];
