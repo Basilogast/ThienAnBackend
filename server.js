@@ -115,7 +115,7 @@ const createTables = async () => {
 createTables();
 
 // Helper function to validate allowed tables
-const allowedTables = ["workcards", "pitches","competition"];
+const allowedTables = ["workcards", "pitches", "competition"];
 const validateTable = (table) => allowedTables.includes(table);
 
 // Get all records from a specified table
@@ -145,8 +145,9 @@ app.post("/api/:table", formidableMiddleware(), async (req, res) => {
 
   try {
     const { size, text, textPara, img, pdfUrl, detailsRoute } = req.fields;
-    const textParaArray = textPara;
-
+    console.log(textPara);
+    const textParaArray = Array.isArray(JSON.parse(textPara)) ? JSON.parse(textPara) : []; 
+    console.log(textParaArray);
     const result = await pool.query(
       `INSERT INTO ${table} (size, img, text, "pdfUrl", "textPara", "detailsRoute") 
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
@@ -221,8 +222,9 @@ app.put("/api/:table/:id", formidableMiddleware(), async (req, res) => {
 
   try {
     const { size, text, textPara, detailsRoute, img, pdfUrl } = req.fields;
-    const textParaArray = textPara;
-
+    console.log(textPara, typeof(textPara));
+    const textParaArray = Array.isArray(JSON.parse(textPara)) ? JSON.parse(textPara) : []; 
+    console.log(textParaArray, typeof(textParaArray));
     const updates = [];
     const values = [];
     let query = `UPDATE ${table} SET `;
@@ -348,12 +350,10 @@ app.post("/contact", (req, res) => {
 
   contactEmail.sendMail(mailOptions, (error, info) => {
     if (error) {
-      res
-        .status(500)
-        .json({
-          success: false,
-          message: "Failed to send message. Please try again later.",
-        });
+      res.status(500).json({
+        success: false,
+        message: "Failed to send message. Please try again later.",
+      });
     } else {
       res
         .status(200)
