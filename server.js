@@ -56,6 +56,7 @@ app.use(express.json()); // Parse JSON bodies
 const allowedOrigins = [
   "https://basilogast.github.io",
   "http://localhost:5173",
+  "https://annguyen.vercel.app",
 ];
 app.use(
   cors({
