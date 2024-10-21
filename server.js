@@ -57,7 +57,7 @@ const allowedOrigins = [
   "https://basilogast.github.io",
   "http://localhost:5173",
   "https://annguyen.vercel.app",
-  "https://demoportfolio1.vercel.app",
+  // "https://demoportfolio1.vercel.app",
 ];
 app.use(
   cors({
